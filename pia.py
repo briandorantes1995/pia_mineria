@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
-import matplotlib.pyplot as plt
-
+import statsmodels.api as sm
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
 
 # Cargar Dataset
 df = pd.read_excel(open('Dataset.xlsx', 'rb'),
@@ -19,53 +21,89 @@ df['Tiempo^3'] = df['Tiempo']**3
 # Variables de respuesta (Y)
 Y = df[['GDP', 'Investment', 'Exports']]
 
-# Ajustar modelos de distintos grados
-X1 = df[['Tiempo']]  # Modelo lineal
-X2 = df[['Tiempo', 'Tiempo^2']]  # Modelo cuadrático
-X3 = df[['Tiempo', 'Tiempo^2', 'Tiempo^3']]  # Modelo cúbico
+# Matriz de correlacion
+correlation_matrix = Y.corr()
+print(correlation_matrix,"\n\n\n")
 
-# Ajustar modelos
-model1 = LinearRegression().fit(X1, Y)
-model2 = LinearRegression().fit(X2, Y)
-model3 = LinearRegression().fit(X3, Y)
+# Matriz de dispersion
+sns.pairplot(df[['GDP', 'Investment', 'Exports']], diag_kind='kde')
+plt.savefig("matriz_dispersion.png")
 
-# Comparar modelos
-print(f"R² Lineal: {model1.score(X1, Y):.4f}")
-print(f"R² Cuadrático: {model2.score(X2, Y):.4f}")
-print(f"R² Cúbico: {model3.score(X3, Y):.4f}")
+# Variables a graficar
+variables = ['Exports', 'Investment', 'GDP']
+titulos = ['Total export', 'Total investment', 'GDP']
 
-# Crear predicciones con cada modelo
-df_sorted = df.sort_values(by='Tiempo')  # Asegurar orden correcto
-X_pred = df_sorted[['Tiempo', 'Tiempo^2', 'Tiempo^3']]
+# Crear subplots
+fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 7), sharex=True)
 
-# Obtener predicciones y asignarlas correctamente
-preds_linear = model1.predict(df_sorted[['Tiempo']])
-preds_quadratic = model2.predict(df_sorted[['Tiempo', 'Tiempo^2']])
-preds_cubic = model3.predict(X_pred)
+for i, var in enumerate(variables):
+    axes[i].plot(df['Tiempo'], df[var], marker='o', linestyle='-', color='black', markersize=5, markerfacecolor='white')
+    axes[i].set_ylabel(titulos[i])
+    axes[i].grid(False)
 
-# Crear columnas separadas
-df_sorted[['Linear_GDP', 'Linear_Investment', 'Linear_Exports']] = preds_linear
-df_sorted[['Quadratic_GDP', 'Quadratic_Investment', 'Quadratic_Exports']] = preds_quadratic
-df_sorted[['Cubic_GDP', 'Cubic_Investment', 'Cubic_Exports']] = preds_cubic
+# Configurar eje X
+axes[-1].set_xlabel("Period")
 
-# Graficar cada variable por separado
-fig, axes = plt.subplots(3, 1, figsize=(8, 12))
-
-for i, var in enumerate(['GDP', 'Investment', 'Exports']):
-    ax = axes[i]
-    ax.scatter(df_sorted['Tiempo'], df_sorted[var], label='Datos reales', color='black', alpha=0.6)
-    ax.plot(df_sorted['Tiempo'], df_sorted[f'Linear_{var}'], label='Lineal', linestyle='dashed', color='blue')
-    ax.plot(df_sorted['Tiempo'], df_sorted[f'Quadratic_{var}'], label='Cuadratico', linestyle='dashed', color='green')
-    ax.plot(df_sorted['Tiempo'], df_sorted[f'Cubic_{var}'], label='Cubico', linestyle='solid', color='red')
-
-    ax.set_title(f'{var} vs. Tiempo')
-    ax.set_xlabel('Tiempo (normalizado)')
-    ax.set_ylabel(var)
-    ax.legend()
-
+# Ajustar diseño y guardar imagen
 plt.tight_layout()
-plt.savefig("resultados.png")
+plt.savefig("grafico_series_temporales.png", dpi=300)
 
+# Ajustar modelos cuadratico
+X2 = df[['Tiempo', 'Tiempo^2']]
+
+# Modelo
+model = LinearRegression().fit(X2, Y)
+
+# Resultado modelo
+print(f"R² Cuadrático: {model.score(X2, Y):.4f}")
+
+# Extraer los residuos estándar del modelo
+residuals = Y.values - model.predict(X2)
+
+# Matriz de diseño X sin la constante
+X_values = X2.values
+
+# Inicializar lista de residuos recursivos
+recursive_residuals = []
+
+# 2 Calculo de residuos recursivos
+for j in range(1, len(X_values)):
+    X_j = X_values[:j]  # Subconjunto de datos hasta j-1
+    Y_j = Y.values[:j]
+
+    # Ajustar modelo con los datos hasta la observacion j
+    model_j = sm.OLS(Y_j, X_j).fit()
+
+    # Prediccion para la observación actual
+    Y_pred_j = model_j.predict(X_values[j])
+
+    # Calcular el residuo recursivo
+    e_jj = np.sqrt(1 + X_values[j] @ np.linalg.pinv(X_j.T @ X_j) @ X_values[j].T)
+    u_nj = (Y.values[j] - Y_pred_j) / e_jj
+
+    recursive_residuals.append(u_nj)
+
+# Convertir a array de NumPy
+recursive_residuals = np.array(recursive_residuals)
+
+print("Residuos",recursive_residuals, "\n\n\n")
+
+# 3 Construcción del proceso de suma parcial de residuos
+def partial_sum_process(residuals):
+    n, m = residuals.shape  # Obtener dimensiones (n: número de observaciones, m: número de variables)
+    Q_n = np.zeros((n, m))  # Inicializar matriz de suma parcial
+
+    for j in range(1, n):
+        Q_n[j] = Q_n[j-1] + residuals[j]  # Sumar por cada columna
+
+    return Q_n
+
+# Pasar recursive_residuals de tridimensional a  bidimensional
+recursive_residuals = recursive_residuals.squeeze()
+
+# Aplicar la función a los residuos recursivos
+Q_n = partial_sum_process(recursive_residuals)
+print(Q_n)
 
 
 
