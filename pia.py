@@ -15,15 +15,13 @@ df = df.sort_values(by=['Año', 'Cuatrimestre']).reset_index(drop=True)
 
 # Normalizamos el tiempo en el intervalo [0,1]
 df['Tiempo'] = np.linspace(1/len(df), 1, len(df))
-df['Tiempo^2'] = df['Tiempo']**2
-df['Tiempo^3'] = df['Tiempo']**3
 
 # Variables de respuesta (Y)
 Y = df[['GDP', 'Investment', 'Exports']]
 
 # Matriz de correlacion
 correlation_matrix = Y.corr()
-print(correlation_matrix,"\n\n\n")
+print("\n\nMatriz Correlacion \n", correlation_matrix, "\n\n\n")
 
 # Matriz de dispersion
 sns.pairplot(df[['GDP', 'Investment', 'Exports']], diag_kind='kde')
@@ -44,24 +42,21 @@ for i, var in enumerate(variables):
 # Configurar eje X
 axes[-1].set_xlabel("Period")
 
-# Ajustar diseño y guardar imagen
+# guardar  series
 plt.tight_layout()
 plt.savefig("grafico_series_temporales.png", dpi=300)
 
 # Ajustar modelos cuadratico
-X2 = df[['Tiempo', 'Tiempo^2']]
+X = df[['Tiempo']]
 
 # Modelo
-model = LinearRegression().fit(X2, Y)
-
-# Resultado modelo
-print(f"R² Cuadrático: {model.score(X2, Y):.4f}")
+model = LinearRegression().fit(X, Y)
 
 # Extraer los residuos estándar del modelo
-residuals = Y.values - model.predict(X2)
+residuals = Y.values - model.predict(X)
 
 # Matriz de diseño X sin la constante
-X_values = X2.values
+X_values = X.values
 
 # Inicializar lista de residuos recursivos
 recursive_residuals = []
@@ -86,7 +81,7 @@ for j in range(1, len(X_values)):
 # Convertir a array de NumPy
 recursive_residuals = np.array(recursive_residuals)
 
-print("Residuos",recursive_residuals, "\n\n\n")
+print("Residuos\n\n", recursive_residuals, "\n\n\n")
 
 # 3 Construcción del proceso de suma parcial de residuos
 def partial_sum_process(residuals):
