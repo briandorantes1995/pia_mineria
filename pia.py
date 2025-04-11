@@ -1,104 +1,92 @@
-import numpy as np
 import pandas as pd
+import numpy as np
 from matplotlib import pyplot as plt
-from sklearn.linear_model import LinearRegression
 import statsmodels.api as sm
 import seaborn as sns
-from sklearn.preprocessing import MinMaxScaler
+from scipy.linalg import sqrtm
 
-# Cargar Dataset
-df = pd.read_excel(open('Dataset.xlsx', 'rb'),
-                   sheet_name='Dataset')
+# cargar los datos
+datos = pd.read_excel(open('Dataset.xlsx', 'rb'), sheet_name='Dataset')
 
-# Ordenamos los datos en funcion del tiempo
-df = df.sort_values(by=['Año', 'Cuatrimestre']).reset_index(drop=True)
+# ordenar los datos por año y cuatrimestre
+datos = datos.sort_values(by=['Año', 'Cuatrimestre']).reset_index(drop=True)
 
-# Normalizamos el tiempo en el intervalo [0,1]
-df['Tiempo'] = np.linspace(1/len(df), 1, len(df))
+# crear la variable tiempo normalizada en el intervalo [0,1]
+datos['tiempo'] = np.linspace(1/len(datos), 1, len(datos))
 
-# Variables de respuesta (Y)
-Y = df[['GDP', 'Investment', 'Exports']]
+# seleccionar las variables de respuesta
+respuesta = datos[['GDP', 'Investment', 'Exports']]
 
-# Matriz de correlacion
-correlation_matrix = Y.corr()
-print("\n\nMatriz Correlacion \n", correlation_matrix, "\n\n\n")
+# matriz de correlacion
+matriz_correlacion = respuesta.corr()
+print("\nMatriz de correlacion:\n", matriz_correlacion, "\n")
 
-# Matriz de dispersion
-sns.pairplot(df[['GDP', 'Investment', 'Exports']], diag_kind='kde')
+# matriz de dispersion
+sns.pairplot(respuesta, diag_kind='kde')
 plt.savefig("matriz_dispersion.png")
 
-# Variables a graficar
+# graficar las series de tiempo
 variables = ['Exports', 'Investment', 'GDP']
-titulos = ['Total export', 'Total investment', 'GDP']
+titulos = ['Exports', 'Investment', 'GDP']
 
-# Crear subplots
-fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 7), sharex=True)
-
+fig, ejes = plt.subplots(nrows=3, ncols=1, figsize=(10, 7), sharex=True)
 for i, var in enumerate(variables):
-    axes[i].plot(df['Tiempo'], df[var], marker='o', linestyle='-', color='black', markersize=5, markerfacecolor='white')
-    axes[i].set_ylabel(titulos[i])
-    axes[i].grid(False)
-
-# Configurar eje X
-axes[-1].set_xlabel("Period")
-
-# guardar  series
+    ejes[i].plot(datos['tiempo'], datos[var], marker='o', linestyle='-', color='black', markersize=5, markerfacecolor='white')
+    ejes[i].set_ylabel(titulos[i])
+    ejes[i].grid(False)
+ejes[-1].set_xlabel("Periodo")
 plt.tight_layout()
-plt.savefig("grafico_series_temporales.png", dpi=300)
+plt.savefig("series_temporales.png", dpi=300)
 
-# Ajustar modelos cuadratico
-X = df[['Tiempo']]
+# modelo lineal
+X = datos[['tiempo']]
+X_lineal = sm.add_constant(X)  # agregar columna de 1 para intercepto
 
-# Modelo
-model = LinearRegression().fit(X, Y)
+# funcion para calcular residuos recursivos
+def calcular_residuos_recursivos(X, y):
+    residuos = []
+    for j in range(2, len(X)):
+        X_j = X[:j]
+        y_j = y[:j]
+        modelo_j = sm.OLS(y_j, X_j).fit()
+        y_pred = modelo_j.predict(X[j])
+        e_jj = np.sqrt(1 + X[j] @ np.linalg.pinv(X_j.T @ X_j) @ X[j].T)
+        u_j = (y[j] - y_pred) / e_jj
+        residuos.append(u_j)
+    return np.array(residuos)
 
-# Extraer los residuos estándar del modelo
-residuals = Y.values - model.predict(X)
+# residuos recursivos por variable
+res_gdp = calcular_residuos_recursivos(X_lineal.values, datos['GDP'].values)
+res_investment = calcular_residuos_recursivos(X_lineal.values, datos['Investment'].values)
+res_export = calcular_residuos_recursivos(X_lineal.values, datos['Exports'].values)
 
-# Matriz de diseño X sin la constante
-X_values = X.values
+# igualar tamaño minimo
+longitud = min(len(res_gdp), len(res_investment), len(res_export))
+U = np.column_stack((res_gdp[:longitud], res_investment[:longitud], res_export[:longitud]))
 
-# Inicializar lista de residuos recursivos
-recursive_residuals = []
-
-# 2 Calculo de residuos recursivos
-for j in range(1, len(X_values)):
-    X_j = X_values[:j]  # Subconjunto de datos hasta j-1
-    Y_j = Y.values[:j]
-
-    # Ajustar modelo con los datos hasta la observacion j
-    model_j = sm.OLS(Y_j, X_j).fit()
-
-    # Prediccion para la observación actual
-    Y_pred_j = model_j.predict(X_values[j])
-
-    # Calcular el residuo recursivo
-    e_jj = np.sqrt(1 + X_values[j] @ np.linalg.pinv(X_j.T @ X_j) @ X_values[j].T)
-    u_nj = (Y.values[j] - Y_pred_j) / e_jj
-
-    recursive_residuals.append(u_nj)
-
-# Convertir a array de NumPy
-recursive_residuals = np.array(recursive_residuals)
-
-print("Residuos\n\n", recursive_residuals, "\n\n\n")
-
-# 3 Construcción del proceso de suma parcial de residuos
-def partial_sum_process(residuals):
-    n, m = residuals.shape  # Obtener dimensiones (n: número de observaciones, m: número de variables)
-    Q_n = np.zeros((n, m))  # Inicializar matriz de suma parcial
-
+# proceso de suma parcial
+def suma_parcial(residuos):
+    n, p = residuos.shape
+    Q = np.zeros((n, p))
     for j in range(1, n):
-        Q_n[j] = Q_n[j-1] + residuals[j]  # Sumar por cada columna
+        Q[j] = Q[j-1] + residuos[j]
+    return Q
 
-    return Q_n
+Q = suma_parcial(U)
 
-# Pasar recursive_residuals de tridimensional a  bidimensional
-recursive_residuals = recursive_residuals.squeeze()
+# estimar la matriz de covarianza
+Sigma = np.cov(U.T)
+Sigma_inv_sqrt = np.linalg.inv(sqrtm(Sigma))
 
-# Aplicar la función a los residuos recursivos
-Q_n = partial_sum_process(recursive_residuals)
-print(Q_n)
+# transformar los residuos
+Q_estandar = Q @ Sigma_inv_sqrt.T
+
+# calcular la estadistica KS
+ks = np.max(np.linalg.norm(Q_estandar, axis=1))
+print("\nEstadistica KS:", ks)
+
+
+
 
 
 
