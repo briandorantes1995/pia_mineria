@@ -17,6 +17,14 @@ datos['tiempo'] = np.linspace(1/len(datos), 1, len(datos))
 # seleccionar las variables de respuesta
 respuesta = datos[['GDP', 'Investment', 'Exports']]
 
+# Boxplot
+plt.figure(figsize=(10, 6))
+sns.boxplot(data=respuesta, palette="pastel")
+plt.title("Boxplot - Detección de valores atípicos")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("boxplot_atipicos.png")
+
 # matriz de correlacion
 matriz_correlacion = respuesta.corr()
 print("\nMatriz de correlacion:\n", matriz_correlacion, "\n")
@@ -40,7 +48,7 @@ plt.savefig("series_temporales.png", dpi=300)
 
 # modelo lineal
 X = datos[['tiempo']]
-X_lineal = sm.add_constant(X)  # agregar columna de 1 para intercepto
+X_lineal = sm.add_constant(X)
 
 # funcion para calcular residuos recursivos
 def calcular_residuos_recursivos(X, y):
@@ -64,7 +72,7 @@ res_export = calcular_residuos_recursivos(X_lineal.values, datos['Exports'].valu
 longitud = min(len(res_gdp), len(res_investment), len(res_export))
 U = np.column_stack((res_gdp[:longitud], res_investment[:longitud], res_export[:longitud]))
 
-# proceso de suma parcial
+# suma parcial
 def suma_parcial(residuos):
     n, p = residuos.shape
     Q = np.zeros((n, p))
