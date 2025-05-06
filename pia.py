@@ -4,6 +4,8 @@ from matplotlib import pyplot as plt
 import statsmodels.api as sm
 import seaborn as sns
 from scipy.linalg import sqrtm
+from statsmodels.stats.diagnostic import het_breuschpagan
+from numpy.polynomial.polynomial import polyvander
 
 # cargar los datos
 datos = pd.read_excel(open('Dataset.xlsx', 'rb'), sheet_name='Dataset')
@@ -46,52 +48,72 @@ ejes[-1].set_xlabel("Periodo")
 plt.tight_layout()
 plt.savefig("series_temporales.png", dpi=300)
 
-# modelo lineal
-X = datos[['tiempo']]
-X_lineal = sm.add_constant(X)
+# Para almacenar resultados
+resultados = {'Variable': [], 'Grado': [], 'AIC': [], 'KS': [], 'BP_pvalue': [], 'Coef_pvalores': []}
 
-# funcion para calcular residuos recursivos
-def calcular_residuos_recursivos(X, y):
-    residuos = []
-    for j in range(2, len(X)):
-        X_j = X[:j]
-        y_j = y[:j]
-        modelo_j = sm.OLS(y_j, X_j).fit()
-        y_pred = modelo_j.predict(X[j])
-        e_jj = np.sqrt(1 + X[j] @ np.linalg.pinv(X_j.T @ X_j) @ X[j].T)
-        u_j = (y[j] - y_pred) / e_jj
-        residuos.append(u_j)
-    return np.array(residuos)
+variables = ['GDP', 'Investment', 'Exports']
 
-# residuos recursivos por variable
-res_gdp = calcular_residuos_recursivos(X_lineal.values, datos['GDP'].values)
-res_investment = calcular_residuos_recursivos(X_lineal.values, datos['Investment'].values)
-res_export = calcular_residuos_recursivos(X_lineal.values, datos['Exports'].values)
+for variable in variables:
+    y = datos[variable].values
 
-# igualar tamaño minimo
-longitud = min(len(res_gdp), len(res_investment), len(res_export))
-U = np.column_stack((res_gdp[:longitud], res_investment[:longitud], res_export[:longitud]))
+    for grado in range(0, 4):
+        # Crear diseño polinomial (constante + t^1 + t^2 + ... t^grado)
+        X_poly = polyvander(datos['tiempo'].values, grado)
+        modelo = sm.OLS(y, X_poly).fit()
 
-# suma parcial
-def suma_parcial(residuos):
-    n, p = residuos.shape
-    Q = np.zeros((n, p))
-    for j in range(1, n):
-        Q[j] = Q[j-1] + residuos[j]
-    return Q
+        # AIC
+        aic = modelo.aic
 
-Q = suma_parcial(U)
+        # Prueba de Breusch-Pagan
+        X_poly_const = sm.add_constant(X_poly, has_constant='add')
+        bp_test = het_breuschpagan(modelo.resid, X_poly_const)
+        bp_pval = bp_test[1]
 
-# estimar la matriz de covarianza
-Sigma = np.cov(U.T)
-Sigma_inv_sqrt = np.linalg.inv(sqrtm(Sigma))
+        # Pruebas t (p-valores de los coeficientes)
+        pvals = modelo.pvalues
 
-# transformar los residuos
-Q_estandar = Q @ Sigma_inv_sqrt.T
+        # Calcular residuos recursivos
+        def residuos_recursivos_general(X, y):
+            residuos = []
+            for j in range(grado + 2, len(X)):
+                X_j = X[:j]
+                y_j = y[:j]
+                modelo_j = sm.OLS(y_j, X_j).fit()
+                y_pred = modelo_j.predict(X[j])
+                e_jj = np.sqrt(1 + X[j] @ np.linalg.pinv(X_j.T @ X_j) @ X[j].T)
+                u_j = (y[j] - y_pred) / e_jj
+                residuos.append(u_j)
+            return np.array(residuos)
 
-# calcular la estadistica KS
-ks = np.max(np.linalg.norm(Q_estandar, axis=1))
-print("\nEstadistica KS:", ks)
+        residuos = residuos_recursivos_general(X_poly, y)
+        if len(residuos) < 2:
+            continue  # evitar errores por tamaño
+        # KS multivariado univariado (por variable)
+        Q = np.cumsum(residuos)
+        sigma = np.std(residuos)
+        ks_stat = np.max(np.abs(Q / sigma))
+
+        resultados['Variable'].append(variable)
+        resultados['Grado'].append(grado)
+        resultados['AIC'].append(aic)
+        resultados['KS'].append(ks_stat)
+        resultados['BP_pvalue'].append(bp_pval)
+        resultados['Coef_pvalores'].append(pvals.tolist())
+
+# Convertir a DataFrame
+df_resultados = pd.DataFrame(resultados)
+pd.set_option("display.max_colwidth", None)
+# Crear tablas separadas por variable
+for var in variables:
+    print(f"\n{'='*60}")
+    print(f"Resultados para la variable: {var}")
+    print(f"{'='*60}")
+
+    tabla_var = df_resultados[df_resultados['Variable'] == var][
+        ['Grado', 'AIC', 'KS', 'BP_pvalue', 'Coef_pvalores']
+    ].reset_index(drop=True)
+
+    print(tabla_var.to_string(index=False))
 
 
 
