@@ -48,7 +48,7 @@ ejes[-1].set_xlabel("Periodo")
 plt.tight_layout()
 plt.savefig("series_temporales.png", dpi=300)
 
-# Para almacenar resultados
+# almacenar los resultados
 resultados = {'Variable': [], 'Grado': [], 'AIC': [], 'KS': [], 'BP_pvalue': [], 'Coef_pvalores': []}
 
 variables = ['GDP', 'Investment', 'Exports']
@@ -57,19 +57,19 @@ for variable in variables:
     y = datos[variable].values
 
     for grado in range(0, 4):
-        # Crear diseño polinomial (constante + t^1 + t^2 + ... t^grado)
+        # Crear diseño polinomial
         X_poly = polyvander(datos['tiempo'].values, grado)
         modelo = sm.OLS(y, X_poly).fit()
 
         # AIC
         aic = modelo.aic
 
-        # Prueba de Breusch-Pagan
+        # Breusch-Pagan
         X_poly_const = sm.add_constant(X_poly, has_constant='add')
         bp_test = het_breuschpagan(modelo.resid, X_poly_const)
         bp_pval = bp_test[1]
 
-        # Pruebas t (p-valores de los coeficientes)
+        # Pruebas t
         pvals = modelo.pvalues
 
         # Calcular residuos recursivos
@@ -100,10 +100,14 @@ for variable in variables:
         resultados['BP_pvalue'].append(bp_pval)
         resultados['Coef_pvalores'].append(pvals.tolist())
 
-# Convertir a DataFrame
+
+# Mostrar datos
 df_resultados = pd.DataFrame(resultados)
+df_resultados['Coef_pvalores'] = df_resultados['Coef_pvalores'].apply(
+    lambda lista: [round(p, 4) for p in lista]
+)
+
 pd.set_option("display.max_colwidth", None)
-# Crear tablas separadas por variable
 for var in variables:
     print(f"\n{'='*60}")
     print(f"Resultados para la variable: {var}")
