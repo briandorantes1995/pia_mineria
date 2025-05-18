@@ -7,17 +7,15 @@ from scipy.linalg import sqrtm
 from statsmodels.stats.diagnostic import het_breuschpagan
 from numpy.polynomial.polynomial import polyvander
 
-
 pd.set_option("display.max_colwidth", None)
 pd.set_option('display.width', 120)
 pd.set_option('display.precision', 4)
 
-# cargar datos
 datos = pd.read_excel(open('Dataset.xlsx', 'rb'), sheet_name='Dataset')
 datos = datos.sort_values(by=['Año', 'Cuatrimestre']).reset_index(drop=True)
-datos['tiempo_norm'] = np.linspace(1/len(datos), 1, len(datos))
-datos['tiempo_seq'] = np.arange(1, len(datos) + 1)
 
+# Variable de tiempo normalizada
+datos['tiempo_norm'] = np.linspace(1/len(datos), 1, len(datos))
 variables_respuesta_nombres = ['GDP', 'Investment', 'Exports']
 respuesta_df = datos[variables_respuesta_nombres]
 
@@ -33,16 +31,10 @@ plt.close()
 
 # Matriz de correlacion
 matriz_correlacion = respuesta_df.corr()
-plt.figure(figsize=(8, 6))
-sns.heatmap(matriz_correlacion, annot=True, cmap="coolwarm", fmt=".2f", linewidths=.5)
-plt.title("Matriz de Correlación de Variables de Respuesta")
-plt.tight_layout()
-plt.savefig("matriz_correlacion.png")
-plt.close()
 print("\nMatriz de correlacion:\n", matriz_correlacion, "\n")
 
 
-# Matriz de dispersión
+# Matriz de dispersion
 pair_plot = sns.pairplot(respuesta_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 50, 'edgecolor': 'k'})
 pair_plot.fig.suptitle("Matriz de Dispersión de Variables de Respuesta", y=1.02, fontsize=16)
 plt.tight_layout()
@@ -95,7 +87,7 @@ resultados_consolidados_por_grado = []
 detalles_univariados_todos_modelos = []
 
 grados_a_probar = [0, 2, 3, 4]
-tiempo_para_poly_ajuste = datos['tiempo_seq'].values
+tiempo_para_poly_ajuste = datos['tiempo_norm'].values
 
 for grado_actual_comun in grados_a_probar:
     X_matriz_poly_comun = polyvander(tiempo_para_poly_ajuste, grado_actual_comun)
@@ -164,20 +156,20 @@ for grado_actual_comun in grados_a_probar:
 
     resultados_consolidados_por_grado.append({
         "Grado_Polinomio": grado_actual_comun,
-        "AIC_Agregado (Suma)": round(aic_sum_para_grado_actual, 2),
+        "AIC_Agregado": round(aic_sum_para_grado_actual, 2),
         "KS_Multivariada": round(ks_multivariado_calculada, 4) if not np.isnan(ks_multivariado_calculada) else np.nan,
         "Num_Res_Rec_KS": num_res_rec_efectivos_ks,
         "BP_Univar (GDP,Inv,Exp)": [round(p,4) if not np.isnan(p) else np.nan for p in bp_pvalues_grado_actual_lista]
     })
 
-# Resultados
-print("\nRESULTADOS CONSOLIDADOS POR GRADO POLINÓMICO")
+# --- Resultados ---
+print("\n--- Resultados consolodidados por grado polinomico ---")
 df_resultados_finales_grado = pd.DataFrame(resultados_consolidados_por_grado)
 if not df_resultados_finales_grado.empty:
     df_resultados_finales_grado = df_resultados_finales_grado.set_index("Grado_Polinomio")
 print(df_resultados_finales_grado.to_string())
 
-print("\nDETALLES DE AJUSTE UNIVARIADO (AIC, BP, Coef. Significancia)")
+print("\n--- Detalles ajuste univariado (AIC, BP, Coef. Significancia) ---")
 df_detalles_univar_final = pd.DataFrame(detalles_univariados_todos_modelos)
 if not df_detalles_univar_final.empty:
     for var_nombre_actual_loop in variables_respuesta_nombres:
@@ -194,8 +186,6 @@ if not df_detalles_univar_final.empty:
         print(tabla_var_detalle.to_string())
 else:
     print("No se generaron resultados detallados univariados.")
-
-
 
 
 
