@@ -86,7 +86,7 @@ def calcular_residuos_recursivos_univariado(X_design, y_target, min_obs_para_ini
 resultados_consolidados_por_grado = []
 detalles_univariados_todos_modelos = []
 
-grados_a_probar = [0, 2, 3, 4]
+grados_a_probar = [1, 2, 3, 4]
 tiempo_para_poly_ajuste = datos['tiempo_norm'].values
 
 for grado_actual_comun in grados_a_probar:
@@ -96,6 +96,7 @@ for grado_actual_comun in grados_a_probar:
     residuos_recursivos_para_U = []
     aic_sum_para_grado_actual = 0.0
     bp_pvalues_grado_actual_lista = []
+    ssr_sum_para_grado_actual = 0.0
 
     for var_nombre_actual in variables_respuesta_nombres:
         y_serie_actual = datos[var_nombre_actual].values
@@ -103,6 +104,9 @@ for grado_actual_comun in grados_a_probar:
 
         aic_univar = modelo_ols_univar.aic
         aic_sum_para_grado_actual += aic_univar
+
+        ssr_univar = modelo_ols_univar.ssr
+        ssr_sum_para_grado_actual += ssr_univar
 
         bp_lm_pvalor_univar = np.nan
         if X_matriz_poly_comun.shape[1] > 1:
@@ -116,6 +120,7 @@ for grado_actual_comun in grados_a_probar:
             "Variable": var_nombre_actual,
             "Grado_Polinomio": grado_actual_comun,
             "AIC_Univar": round(aic_univar, 2),
+            "SSR_Univar": round(ssr_univar, 2),
             "BP_Univar": round(bp_lm_pvalor_univar, 4) if not np.isnan(bp_lm_pvalor_univar) else np.nan,
             "Coef_Pvalores_Univar": [round(p, 4) for p in coef_pvals_univar]
         })
@@ -157,6 +162,7 @@ for grado_actual_comun in grados_a_probar:
     resultados_consolidados_por_grado.append({
         "Grado_Polinomio": grado_actual_comun,
         "AIC_Agregado": round(aic_sum_para_grado_actual, 2),
+        "SSR_Agregado (Suma)": round(ssr_sum_para_grado_actual, 2),
         "KS_Multivariada": round(ks_multivariado_calculada, 4) if not np.isnan(ks_multivariado_calculada) else np.nan,
         "Num_Res_Rec_KS": num_res_rec_efectivos_ks,
         "BP_Univar (GDP,Inv,Exp)": [round(p,4) if not np.isnan(p) else np.nan for p in bp_pvalues_grado_actual_lista]
@@ -165,6 +171,7 @@ for grado_actual_comun in grados_a_probar:
 # --- Resultados ---
 print("\n--- Resultados consolodidados por grado polinomico ---")
 df_resultados_finales_grado = pd.DataFrame(resultados_consolidados_por_grado)
+df_resultados_finales_grado['SSR_Agregado (Suma)'] = df_resultados_finales_grado['SSR_Agregado (Suma)'].apply(lambda x: f"{x:,.0f}")
 if not df_resultados_finales_grado.empty:
     df_resultados_finales_grado = df_resultados_finales_grado.set_index("Grado_Polinomio")
 print(df_resultados_finales_grado.to_string())
@@ -175,17 +182,21 @@ if not df_detalles_univar_final.empty:
     for var_nombre_actual_loop in variables_respuesta_nombres:
         print(f"\n  Detalles para Variable: {var_nombre_actual_loop}")
         tabla_var_detalle = df_detalles_univar_final[df_detalles_univar_final['Variable'] == var_nombre_actual_loop][
-            ['Grado_Polinomio', 'AIC_Univar', 'BP_Univar', 'Coef_Pvalores_Univar']
+            ['Grado_Polinomio', 'AIC_Univar', 'BP_Univar', 'SSR_Univar','Coef_Pvalores_Univar']
         ].set_index('Grado_Polinomio')
 
         def format_pvals(pvals_list_format):
             if not isinstance(pvals_list_format, list): return "N/A"
             return ", ".join([f"B{i}={p:.3f}{'*' if p < 0.05 else ''}" for i, p in enumerate(pvals_list_format)])
 
+        tabla_var_detalle['SSR_Univar'] = tabla_var_detalle['SSR_Univar'].apply(lambda x: f"{x:,.0f}")
         tabla_var_detalle['Coef_Pvalores_Univar'] = tabla_var_detalle['Coef_Pvalores_Univar'].apply(format_pvals)
+
+
         print(tabla_var_detalle.to_string())
 else:
     print("No se generaron resultados detallados univariados.")
+
 
 
 
