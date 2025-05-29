@@ -120,8 +120,8 @@ for grado_actual_comun in grados_a_probar:
             "Variable": var_nombre_actual,
             "Grado_Polinomio": grado_actual_comun,
             "AIC_Univar": round(aic_univar, 2),
-            "SSR_Univar": round(ssr_univar, 2),
             "BP_Univar": round(bp_lm_pvalor_univar, 4) if not np.isnan(bp_lm_pvalor_univar) else np.nan,
+            "SSR_Univar": round(ssr_univar, 2),
             "Coef_Pvalores_Univar": [round(p, 4) for p in coef_pvals_univar]
         })
 
@@ -162,16 +162,16 @@ for grado_actual_comun in grados_a_probar:
     resultados_consolidados_por_grado.append({
         "Grado_Polinomio": grado_actual_comun,
         "AIC_Agregado": round(aic_sum_para_grado_actual, 2),
-        "SSR_Agregado (Suma)": round(ssr_sum_para_grado_actual, 2),
+        "BP_Univar (GDP,Inv,Exp)": [round(p,4) if not np.isnan(p) else np.nan for p in bp_pvalues_grado_actual_lista],
         "KS_Multivariada": round(ks_multivariado_calculada, 4) if not np.isnan(ks_multivariado_calculada) else np.nan,
         "Num_Res_Rec_KS": num_res_rec_efectivos_ks,
-        "BP_Univar (GDP,Inv,Exp)": [round(p,4) if not np.isnan(p) else np.nan for p in bp_pvalues_grado_actual_lista]
+        "SSR_Agregado": round(ssr_sum_para_grado_actual, 2),
     })
 
 # --- Resultados ---
 print("\n--- Resultados consolodidados por grado polinomico ---")
 df_resultados_finales_grado = pd.DataFrame(resultados_consolidados_por_grado)
-df_resultados_finales_grado['SSR_Agregado (Suma)'] = df_resultados_finales_grado['SSR_Agregado (Suma)'].apply(lambda x: f"{x:,.0f}")
+df_resultados_finales_grado['SSR_Agregado'] = df_resultados_finales_grado['SSR_Agregado'].apply(lambda x: f"{x:,.0f}")
 if not df_resultados_finales_grado.empty:
     df_resultados_finales_grado = df_resultados_finales_grado.set_index("Grado_Polinomio")
 print(df_resultados_finales_grado.to_string())
